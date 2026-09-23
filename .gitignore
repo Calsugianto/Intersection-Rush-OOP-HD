@@ -1,0 +1,24 @@
+# Build output
+bin/
+obj/
+ 
+# SplashKit libraries
+lib/
+ 
+# VS Code settings
+.vscode/
+ 
+# Project files
+*.csproj
+ 
+# Logs
+myeasylog
+*.log
+ 
+# IDE files
+.idea/
+.vs/
+ 
+# OS files
+.DS_Store
+Thumbs.db
