@@ -1,6 +1,6 @@
 # Building Realistic Traffic Physics and an Adaptive Signal Algorithm in SplashKit
 
-*A walkthrough of the physics, data structures, and algorithm behind a small traffic-management simulation, written for SIT771's Something Awesome task.*
+*A walkthrough of the data structures and algorithm behind a small traffic-management simulation, written for SIT771's Something Awesome task.*
 
 ## What we're building
 
@@ -8,11 +8,11 @@
 
 This article focuses on the two ideas that make it more than "a rectangle that changes colour every few seconds": **physics-based vehicle movement**, and a **queue-based scheduling algorithm** for the adaptive light. Both are built entirely with SplashKit primitives you already know from the rest of the unit — no new libraries required.
 
-## Part 1: giving vehicles real physics
+## Part 1: giving vehicles real movement
 
-A vehicle in this simulation isn't just a position that jumps forward each frame. It has a **speed** and a **top speed**, and it can only change speed at a limited rate — its acceleration when speeding up, its deceleration when braking. That's the entire physics model: no forces, no mass, just kinematics.
+A vehicle in this simulation isn't just a position that jumps forward each frame. It has a **speed** and a **top speed**, and it can only change speed at a limited rate — its acceleration when speeding up, its deceleration when braking. That's the entire model: no forces, no mass, just kinematics.
 
-The one piece of real physics worth knowing is the **braking distance formula**. From the constant-deceleration equation of motion:
+The one piece worth knowing is the **braking distance formula**. From the constant-deceleration equation of motion:
 
 ```
 v² = u² − 2as
@@ -43,7 +43,7 @@ public void UpdatePhysics(double deltaSeconds, double gapAhead)
 }
 ```
 
-`MaxSpeed`, `Acceleration`, and `Deceleration` are abstract properties on a base `Vehicle` class, overridden differently by `Car`, `Bus`, and `Truck` — a truck has a much lower acceleration and deceleration than a car, so it needs far more following distance at the same speed. That's real physics falling naturally out of polymorphism: three subclasses, one shared update method, three noticeably different driving styles on screen.
+`MaxSpeed`, `Acceleration`, and `Deceleration` are abstract properties on a base `Vehicle` class, overridden differently by `Car`, `Bus`, and `Truck` — a truck has a much lower acceleration and deceleration than a car, so it needs far more following distance at the same speed. That's real falling naturally out of polymorphism: three subclasses, one shared update method, three noticeably different driving styles on screen.
 
 ## Part 2: queueing vehicles with `Queue<T>`
 
@@ -136,7 +136,7 @@ Because both controllers extend the same abstract class, an `Intersection` can h
 
 ## Part 4: wiring it into the game loop
 
-None of this is SplashKit-specific until the very last step — drawing and timing. Each vehicle type loads a pair of sprite images (one for horizontal approaches, one for vertical) exactly the way Healthy Bites loaded its food images:
+None of this is SplashKit-specific until the very last step — drawing and timing. Each vehicle type loads a pair of sprite images (one for horizontal approaches, one for vertical):
 
 ```csharp
 private void LoadResources()
@@ -147,6 +147,70 @@ private void LoadResources()
 ```
 
 ...and the main loop is the same `HandleInput → Update → Draw` structure used throughout the unit — the physics and the algorithm both just live inside `Update()`, one call per frame, same as everything else.
+
+## Part 5: keeping schemas separate, and letting vehicles finish their trip
+
+Two behaviours were missing once real artwork and three side-by-side schemas were in play: vehicles need to actually drive through a green light and off the far side of the road, rather than vanishing the instant they touch the stop line, and each schema's road needs to stay visually separate from its neighbours'.
+
+**Vehicles now drive through, not just up to, the light.** The queue only ever removes its front vehicle once that vehicle is well clear of the intersection, not the moment it reaches the stop line. The obstacle check for the front vehicle now only applies *before* the stop line — once it's past, there's nothing left to block it:
+
+```csharp
+if (v.Position >= STOP_LINE_DISTANCE)
+{
+    gap = 10000; // already through - nothing ahead of it now
+}
+else
+{
+    gap = _light.IsGreenFor(Direction) ? 10000 : STOP_LINE_DISTANCE - v.Position;
+}
+```
+
+— and the vehicle isn't actually removed from the queue until it reaches a further `EXIT_POSITION`, past the stop line:
+
+```csharp
+public const double EXIT_POSITION = STOP_LINE_DISTANCE + EXIT_DISTANCE;
+...
+if (_queue.Count > 0 && _queue.Peek().Position >= EXIT_POSITION)
+    return _queue.Dequeue();
+```
+
+Because the drawing code already just plots a vehicle at "spawn point + `Position`", none of the drawing maths needed to change — a vehicle simply keeps being drawn further along the same line for longer.
+
+## Part 6: sizing the road correctly, and keeping schemas apart
+
+The first attempt at drawing a longer road made a reference-frame mistake worth calling out, because it's an easy one to make: it sized the road using `EXIT_POSITION` (the *whole* spawn-to-exit distance, which already includes the trip to the stop line), applied as if it were extra road on top of that trip — effectively double-counting the approach distance. That left about 90 pixels of drawn road with nothing on it before a vehicle ever appeared.
+
+The actual constraint is simpler: a vehicle spawns at `HALF_SIZE + STOP_LINE_DISTANCE` from the centre, and the *opposite* end of the same road only needs to reach a little past the far edge of the intersection box for an exiting vehicle to clear it. The spawn distance is the bigger of the two, so that's what the road should be sized against — plus a small fixed margin, so a vehicle appears just inside the road's edge rather than exactly on it:
+
+```csharp
+// A vehicle spawns at HALF_SIZE + STOP_LINE_DISTANCE from centre - that's
+// the biggest distance either end of the road actually needs. A small
+// margin on top means the spawn point sits just inside the road's edge
+// rather than exactly on it.
+double roadHalfLength = HALF_SIZE + Approach.STOP_LINE_DISTANCE + ROAD_END_MARGIN;
+```
+
+With the road correctly sized, keeping the three schemas visually separate is just a spacing check against that same number:
+
+```csharp
+// SCHEMA_SPACING must be bigger than 2 * roadHalfLength, or neighbouring
+// schemas' roads will run into each other.
+private const double SCHEMA_SPACING = 320;
+```
+
+## Part 7: winning, not just losing
+
+The simulation originally only ever ended one way — gridlock. Adding a genuine win condition alongside it is a one-line addition to the same `EndGame` idea already used for the loss case, just parameterised:
+
+```csharp
+private void EndGame(bool won)
+{
+    _state = GameState.GameOver;
+    _finalMessage = won ? "You Win!" : "Gridlock!";
+}
+```
+
+`UpdateGameplay` checks the win condition first, since reaching the target score should end the game outright rather than only levelling up — levelling up and winning are two different kinds of score-threshold check, and keeping them as two separate `if`s (rather than folding "win" in as just another level) makes that distinction explicit in the code, not just in a comment.
 
 ## Where this could go next
 

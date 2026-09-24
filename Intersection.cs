@@ -11,7 +11,19 @@ namespace IntersectionRush
     // changes a single line of this class.
     public class Intersection
     {
-        public const double HALF_SIZE = 40;
+        // Half the width/height of the intersection box itself, in pixels.
+        public const double HALF_SIZE = 25;
+
+        // How thick the road is drawn. Kept equal to 2 * HALF_SIZE so the
+        // approach roads and the intersection box line up as one continuous
+        // width, and comfortably wider than any vehicle sprite (10px) so a
+        // vehicle is never drawn overhanging the road's edge.
+        private const double ROAD_WIDTH = 50;
+
+        // How much extra road is drawn past the point where a vehicle
+        // actually spawns, so a vehicle appears just inside the visible road
+        // rather than exactly on its pixel edge.
+        private const double ROAD_END_MARGIN = 20;
 
         private readonly Dictionary<Direction, Approach> _approaches = new Dictionary<Direction, Approach>();
         private readonly TrafficLightController _controller;
@@ -77,12 +89,20 @@ namespace IntersectionRush
 
         public void Draw(double centerX, double centerY)
         {
-            double roadHalfLength = HALF_SIZE + Approach.STOP_LINE_DISTANCE;
+            // How far the road extends either side of the intersection box.
+            // A vehicle spawns at HALF_SIZE + STOP_LINE_DISTANCE from centre -
+            // that's the biggest distance either end of the road actually
+            // needs (further than the smaller gap a vehicle leaves on the
+            // exit side before it disappears), so the road is sized against
+            // that, plus a small margin so the spawn point sits just inside
+            // the road's edge rather than exactly on it.
+            double roadHalfLength = HALF_SIZE + Approach.STOP_LINE_DISTANCE + ROAD_END_MARGIN;
+            double roadHalfWidth = ROAD_WIDTH / 2;
 
             SplashKit.FillRectangle(Color.RGBColor(60, 60, 60),
-                centerX - roadHalfLength, centerY - 14, roadHalfLength * 2, 28);
+                centerX - roadHalfLength, centerY - roadHalfWidth, roadHalfLength * 2, ROAD_WIDTH);
             SplashKit.FillRectangle(Color.RGBColor(60, 60, 60),
-                centerX - 14, centerY - roadHalfLength, 28, roadHalfLength * 2);
+                centerX - roadHalfWidth, centerY - roadHalfLength, ROAD_WIDTH, roadHalfLength * 2);
             SplashKit.FillRectangle(Color.RGBColor(80, 80, 80),
                 centerX - HALF_SIZE, centerY - HALF_SIZE, HALF_SIZE * 2, HALF_SIZE * 2);
 
@@ -91,14 +111,14 @@ namespace IntersectionRush
                 approach.Draw(centerX, centerY, HALF_SIZE);
             }
 
-            DrawLight(centerX, centerY - HALF_SIZE - 18, Direction.North);
-            DrawLight(centerX, centerY + HALF_SIZE + 18, Direction.South);
-            DrawLight(centerX + HALF_SIZE + 18, centerY, Direction.East);
-            DrawLight(centerX - HALF_SIZE - 18, centerY, Direction.West);
+            DrawLight(centerX, centerY - HALF_SIZE - 14, Direction.North);
+            DrawLight(centerX, centerY + HALF_SIZE + 14, Direction.South);
+            DrawLight(centerX + HALF_SIZE + 14, centerY, Direction.East);
+            DrawLight(centerX - HALF_SIZE - 14, centerY, Direction.West);
 
-            SplashKit.DrawText(Label, Color.White, centerX - Label.Length * 4, centerY - HALF_SIZE - 220);
+            SplashKit.DrawText(Label, Color.White, centerX - Label.Length * 4, centerY - roadHalfLength - 20);
             SplashKit.DrawText($"Avg wait: {AverageWaitSeconds:F1}s", Color.White,
-                centerX - 55, centerY + HALF_SIZE + 210);
+                centerX - 55, centerY + roadHalfLength + 10);
         }
 
         private void DrawLight(double x, double y, Direction direction)
@@ -106,7 +126,7 @@ namespace IntersectionRush
             Color c = _controller.IsGreenFor(direction)
                 ? Color.Lime
                 : (_controller.IsYellowFor(direction) ? Color.Yellow : Color.Red);
-            SplashKit.FillCircle(c, x, y, 8);
+            SplashKit.FillCircle(c, x, y, 6);
         }
     }
 }

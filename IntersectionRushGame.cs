@@ -12,17 +12,24 @@ namespace IntersectionRush
         private enum GameState { Intro, Playing, LevelUp, GameOver }
 
         private const int LEVEL_2_SCORE = 50;
-        private const int LEVEL_3_SCORE = 150;
+        private const int LEVEL_3_SCORE = 100;
+        private const int WIN_SCORE = 200;
 
         private const double INTRO_DURATION_MS = 3000;
         private const double LEVEL_UP_DURATION_MS = 2000;
 
         // Base chance (per approach, per frame) of a new vehicle spawning, plus
-        // how much that chance grows with time survived - the same "ramp"
-        // shape used for difficulty in Healthy Bites, applied here to traffic
-        // volume instead of falling-food speed.
+        // how much that chance grows with time survived.
         private const double BASE_SPAWN_CHANCE = 0.001;
         private const double SPAWN_CHANCE_RAMP = 0.0001;
+
+        // The three schemas sit this far apart horizontally. It has to be
+        // bigger than 2 * (Intersection.HALF_SIZE + Approach.STOP_LINE_DISTANCE
+        // + the road's small end margin) or neighbouring schemas' roads would
+        // overlap. 320 clears that with a clean 30px gap either side.
+        private const double SCHEMA_SPACING = 320;
+        private const double SCHEMA_CENTER_X = 200; // left-most schema's centre
+        private const double SCHEMA_CENTER_Y = 260;
 
         private static readonly string[] VehicleImageNames =
         {
@@ -41,6 +48,7 @@ namespace IntersectionRush
 
         private GameState _state;
         private string _bannerText;
+        private string _finalMessage;
         private readonly Timer _stateTimer;
 
         public IntersectionRushGame(Window window)
@@ -60,11 +68,7 @@ namespace IntersectionRush
             EnterIntro();
         }
 
-        // Loads every vehicle sprite once, up front - the same pattern used to
-        // load Healthy Bites' food images.
-        //
-        // IMPORTANT: this expects an image file matching each name (e.g.
-        // CarH.png, CarV.png) to already exist in Resources/images.
+        // Loads every vehicle sprite once, up front
         private void LoadResources()
         {
             foreach (string name in VehicleImageNames)
@@ -133,9 +137,13 @@ namespace IntersectionRush
 
             CheckLevelProgress();
 
-            if (_playerIntersection.IsGridlocked)
+            if (_score >= WIN_SCORE)
             {
-                EndGame();
+                EndGame(won: true);
+            }
+            else if (_playerIntersection.IsGridlocked)
+            {
+                EndGame(won: false);
             }
         }
 
@@ -158,6 +166,11 @@ namespace IntersectionRush
             return new Bus(_elapsedSeconds);
         }
 
+        // Checks whether the score has crossed a threshold that moves the
+        // player up a level. This only ever advances the level - the actual
+        // win check (score >= WIN_SCORE) is handled separately in
+        // UpdateGameplay, since winning ends the game rather than levelling
+        // it up.
         private void CheckLevelProgress()
         {
             if (_level == 1 && _score >= LEVEL_2_SCORE)
@@ -192,9 +205,10 @@ namespace IntersectionRush
             _state = GameState.Playing;
         }
 
-        private void EndGame()
+        private void EndGame(bool won)
         {
             _state = GameState.GameOver;
+            _finalMessage = won ? "You Win!" : "Gridlock!";
         }
 
         public void Draw()
@@ -212,7 +226,7 @@ namespace IntersectionRush
                     DrawBanner(_bannerText);
                     break;
                 case GameState.GameOver:
-                    DrawBanner($"Gridlock! Final score: {_score}");
+                    DrawBanner($"{_finalMessage} Final score: {_score}");
                     break;
             }
 
@@ -221,9 +235,9 @@ namespace IntersectionRush
 
         private void DrawGameplay()
         {
-            _fixedIntersection.Draw(220, 340);
-            _adaptiveIntersection.Draw(550, 340);
-            _playerIntersection.Draw(880, 340);
+            _fixedIntersection.Draw(SCHEMA_CENTER_X, SCHEMA_CENTER_Y);
+            _adaptiveIntersection.Draw(SCHEMA_CENTER_X + SCHEMA_SPACING, SCHEMA_CENTER_Y);
+            _playerIntersection.Draw(SCHEMA_CENTER_X + SCHEMA_SPACING * 2, SCHEMA_CENTER_Y);
 
             SplashKit.DrawText($"Score: {_score}", Color.White, 10, 10);
             SplashKit.DrawText($"Level: {_level}", Color.White, 10, 30);

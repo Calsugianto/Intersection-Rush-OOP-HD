@@ -2,12 +2,14 @@ namespace IntersectionRush
 {
     // The heaviest vehicle - a middling top speed, but the slowest to speed up
     // or slow down of the three, so it needs the most road space to be safe.
+    // Length matches the TruckH/TruckV sprite artwork (40px along the
+    // direction of travel).
     public class Truck : Vehicle
     {
         public override double MaxSpeed => 90;
         public override double Acceleration => 15;
         public override double Deceleration => 30;
-        public override int Length => 65;
+        public override int Length => 40;
 
         protected override string HorizontalSpriteName => "TruckH";
         protected override string VerticalSpriteName => "TruckV";

@@ -15,10 +15,22 @@ namespace IntersectionRush
     {
         // Distance (in pixels) from where a vehicle spawns to the stop line.
         // Public because Intersection uses the same figure to draw the road.
-        public const double STOP_LINE_DISTANCE = 160;
+        public const double STOP_LINE_DISTANCE = 100;
+
+        // How much further a vehicle keeps driving, past the stop line, before
+        // it's considered to have left the schema entirely. This needs to be
+        // bigger than the intersection box (2 * Intersection.HALF_SIZE) or the
+        // vehicle will vanish while still visually inside the intersection -
+        // 90 gives it room to clear a 50px-wide box plus some visible road
+        // beyond it.
+        public const double EXIT_DISTANCE = 90;
+
+        // The full distance a vehicle travels before it's removed - from
+        // spawn, through the stop line, out the far side, gone.
+        public const double EXIT_POSITION = STOP_LINE_DISTANCE + EXIT_DISTANCE;
 
         // If this many vehicles are waiting at once, the approach is gridlocked.
-        private const int MAX_QUEUE_LENGTH = 8;
+        private const int MAX_QUEUE_LENGTH = 6;
 
         private readonly Queue<Vehicle> _queue = new Queue<Vehicle>();
         private readonly TrafficLightController _light;
@@ -39,13 +51,13 @@ namespace IntersectionRush
         }
 
         // Moves every queued vehicle for one frame (front to back), then lets the
-        // front vehicle leave the queue once it has reached the stop line.
-        // Returns the vehicle that just passed through, or null if none did.
+        // front vehicle leave the queue once it has fully driven off the far
+        // side of the intersection. Returns the vehicle that just left, or
+        // null if none did.
         //
         // Reading every vehicle with foreach and only ever removing the single
         // front one afterwards - never during the foreach itself - is the same
-        // "don't mutate a collection while a foreach is reading it" rule from
-        // my Something Awesome video, just applied to a Queue instead of a List.
+        // "don't mutate a collection while a foreach is reading it".
         public Vehicle Update(double deltaSeconds)
         {
             Vehicle previous = null;
@@ -56,15 +68,24 @@ namespace IntersectionRush
 
                 if (previous == null)
                 {
-                    // Front of the queue: the obstacle ahead is the stop line -
-                    // unless the light is green, in which case there's nothing
-                    // in the way at all.
-                    gap = _light.IsGreenFor(Direction) ? 10000 : STOP_LINE_DISTANCE - v.Position;
+                    if (v.Position >= STOP_LINE_DISTANCE)
+                    {
+                        // Already through the light - nothing ahead of it now,
+                        // it's just driving away to the exit point.
+                        gap = 10000;
+                    }
+                    else
+                    {
+                        // Still approaching: the obstacle ahead is the stop
+                        // line, unless the light is green, in which case
+                        // there's nothing in the way at all.
+                        gap = _light.IsGreenFor(Direction) ? 10000 : STOP_LINE_DISTANCE - v.Position;
+                    }
                 }
                 else
                 {
-                    // Not at the front: the obstacle ahead is the back bumper of
-                    // the vehicle in front of it in the queue.
+                    // Not at the front: the obstacle ahead is the back bumper
+                    // of the vehicle in front of it in the queue.
                     gap = previous.Position - previous.Length - v.Position;
                 }
 
@@ -72,7 +93,7 @@ namespace IntersectionRush
                 previous = v;
             }
 
-            if (_queue.Count > 0 && _queue.Peek().Position >= STOP_LINE_DISTANCE)
+            if (_queue.Count > 0 && _queue.Peek().Position >= EXIT_POSITION)
             {
                 return _queue.Dequeue();
             }
